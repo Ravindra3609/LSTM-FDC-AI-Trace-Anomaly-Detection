@@ -3,6 +3,12 @@
 **Bidirectional LSTM Autoencoder with Temporal Attention for semiconductor equipment fault detection**
 Learns normal equipment trace patterns → flags anomalies → shows *where* and *which sensor* caused the fault
 
+<img width="1470" height="796" alt="Screenshot 2026-03-31 at 5 10 12 PM" src="https://github.com/user-attachments/assets/218fa8b4-c693-4056-8f73-aae94c90a1ac" />
+<img width="1470" height="796" alt="Screenshot 2026-03-31 at 5 10 24 PM" src="https://github.com/user-attachments/assets/52b673f9-bfff-4553-a437-c26b6ebc03d4" />
+<img width="1470" height="796" alt="Screenshot 2026-03-31 at 5 10 35 PM" src="https://github.com/user-attachments/assets/d1da2b00-8509-4bf8-82f7-008972d94d88" />
+<img width="1470" height="796" alt="Screenshot 2026-03-31 at 5 10 41 PM" src="https://github.com/user-attachments/assets/82525e06-c935-42ec-984e-b1bc5715f603" />
+<img width="1470" height="796" alt="Screenshot 2026-03-31 at 5 10 46 PM" src="https://github.com/user-attachments/assets/8a3ddbe7-644c-4f94-b480-fd4e6f748e1f" />
+
 ---
 
 ## What this project does
