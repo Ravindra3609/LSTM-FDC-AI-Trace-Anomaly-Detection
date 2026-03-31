@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>LSTM FDC-AI — Trace Anomaly Dashboard</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@300;400;500&display=swap');
+:root{
+  --bg:#07111f;--surf:#0b1929;--card:#0f2035;--card2:#122440;
+  --border:#1a3050;--border2:#254570;
+  --text:#ddeeff;--muted:#5a8ab0;--dim:#2d5070;
+  --accent:#0ea5e9;--green:#22c55e;--red:#ef4444;
+  --orange:#f97316;--yellow:#eab308;--purple:#a855f7;
+  --mono:'IBM Plex Mono',monospace;--sans:'IBM Plex Sans',sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:var(--sans);min-height:100vh;font-size:14px}
+
+/* ── Header ── */
+.hdr{background:var(--surf);border-bottom:1px solid var(--border);
+  padding:12px 24px;display:flex;align-items:center;gap:12px}
+.hdr-dot{width:9px;height:9px;border-radius:50%;background:var(--accent)}
+.hdr h1{font-size:15px;font-weight:500;letter-spacing:.03em}
+.hdr-right{margin-left:auto;display:flex;align-items:center;gap:14px;font-size:12px;color:var(--muted);font-family:var(--mono)}
+.status-pill{display:flex;align-items:center;gap:5px}
+.sdot{width:7px;height:7px;border-radius:50%;background:var(--muted)}
+.sdot.green{background:var(--green)}
+
+/* ── Layout ── */
+.layout{display:grid;grid-template-columns:280px 1fr;height:calc(100vh - 48px)}
+
+/* ── Sidebar ── */
+.sidebar{background:var(--surf);border-right:1px solid var(--border);
+  padding:18px;display:flex;flex-direction:column;gap:14px;overflow-y:auto}
+.slabel{font-size:10px;font-weight:500;color:var(--muted);text-transform:uppercase;
+  letter-spacing:.1em;margin-bottom:6px}
+.metric-grid{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.mcard{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:9px 11px}
+.mval{font-size:18px;font-weight:500;font-family:var(--mono);color:var(--accent)}
+.mlabel{font-size:10px;color:var(--muted);margin-bottom:3px;text-transform:uppercase;letter-spacing:.05em}
+.divider{height:1px;background:var(--border)}
+.radio-row{display:flex;gap:5px}
+.rbtn{flex:1;padding:6px;border:1px solid var(--border2);border-radius:6px;
+  background:transparent;color:var(--muted);font-size:11px;cursor:pointer;text-align:center;transition:all .15s}
+.rbtn.sel{border-color:var(--accent);color:var(--accent);background:rgba(14,165,233,.08)}
+.btn{width:100%;padding:9px;border-radius:7px;border:1px solid var(--border2);
+  background:transparent;color:var(--text);font-size:12px;cursor:pointer;transition:all .15s;font-weight:500}
+.btn:hover{background:var(--card2);border-color:var(--accent)}
+.btn.primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn.primary:hover{opacity:.88}
+.loss-wrap{height:70px;position:relative}
+canvas.loss-chart{width:100%;height:100%}
+
+/* ── Sensor ranking list ── */
+.sensor-list{display:flex;flex-direction:column;gap:4px;margin-top:4px}
+.srow{display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--border)}
+.srow:last-child{border-bottom:none}
+.sname{font-size:11px;font-family:var(--mono);color:var(--muted);width:36px;flex-shrink:0}
+.sbar-wrap{flex:1;height:8px;background:var(--border);border-radius:3px;overflow:hidden}
+.sbar-fill{height:100%;border-radius:3px;transition:width .5s}
+.sval{font-size:10px;font-family:var(--mono);color:var(--muted);width:54px;text-align:right}
+
+/* ── Main ── */
+.main{overflow-y:auto;padding:18px;display:flex;flex-direction:column;gap:14px}
+
+/* ── Verdict card ── */
+.verdict-card{background:var(--card);border:1px solid var(--border);
+  border-radius:10px;padding:16px 18px;display:flex;align-items:center;gap:18px}
+.verdict-txt{font-size:22px;font-weight:500;font-family:var(--mono);letter-spacing:.04em}
+.verdict-txt.fault{color:var(--red)}
+.verdict-txt.normal{color:var(--green)}
+.verdict-txt.idle{color:var(--muted)}
+.score-row{display:flex;gap:10px;flex:1;flex-wrap:wrap}
+.score-cell{background:var(--card2);border-radius:7px;padding:9px 13px;min-width:130px;flex:1}
+.sclabel{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:4px}
+.scval{font-size:20px;font-weight:500;font-family:var(--mono)}
+.scbadge{display:inline-block;padding:1px 9px;border-radius:10px;font-size:10px;margin-top:4px}
+.badge-fault{background:rgba(239,68,68,.15);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.badge-ok{background:rgba(34,197,94,.12);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+
+/* ── Trace section ── */
+.trace-card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px 18px}
+.trace-header{display:flex;align-items:center;gap:10px;margin-bottom:12px;flex-wrap:wrap}
+.trace-title{font-size:13px;font-weight:500}
+.trace-badge{font-size:10px;padding:2px 9px;border-radius:4px;
+  background:rgba(14,165,233,.1);color:var(--accent);border:1px solid rgba(14,165,233,.2);font-family:var(--mono)}
+.sensor-selector{margin-left:auto;display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.sensor-btn{padding:4px 10px;border-radius:5px;border:1px solid var(--border2);
+  background:transparent;color:var(--muted);font-size:11px;font-family:var(--mono);cursor:pointer;transition:all .12s}
+.sensor-btn.active{border-color:var(--accent);color:var(--accent);background:rgba(14,165,233,.08)}
+
+/* ── Canvas charts ── */
+.chart-wrap{position:relative;width:100%;height:200px;margin-bottom:6px}
+canvas.trace-canvas{width:100%;height:100%}
+.chart-label{font-size:10px;color:var(--muted);margin-bottom:4px;font-family:var(--mono)}
+
+/* ── Attention heatmap ── */
+.attn-wrap{position:relative;width:100%;height:46px;margin-top:8px}
+canvas.attn-canvas{width:100%;height:100%;border-radius:4px}
+
+/* ── Step error bar ── */
+.step-wrap{width:100%;height:40px;margin-top:4px;position:relative}
+canvas.step-canvas{width:100%;height:100%}
+
+/* ── Legend ── */
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--muted);margin-top:8px}
+.leg-item{display:flex;align-items:center;gap:5px}
+.leg-dot{width:12px;height:3px;border-radius:2px}
+
+/* ── Log ── */
+.log-card{background:var(--card);border:1px solid var(--border);border-radius:10px}
+.log-hdr{padding:10px 16px;border-bottom:1px solid var(--border);font-size:12px;font-weight:500;
+  display:flex;justify-content:space-between;align-items:center}
+.log-body{padding:10px 16px;font-family:var(--mono);font-size:11px;color:var(--muted);
+  line-height:1.9;max-height:120px;overflow-y:auto}
+.log-ts{color:var(--accent)}
+.log-ok{color:var(--green)}
+.log-err{color:var(--red)}
+
+/* ── Spinner ── */
+.spin{display:inline-block;width:13px;height:13px;border:2px solid var(--border2);
+  border-top-color:var(--accent);border-radius:50%;animation:sp .6s linear infinite;vertical-align:middle;margin-right:5px}
+@keyframes sp{to{transform:rotate(360deg)}}
+
+.idle-msg{text-align:center;padding:50px 20px;color:var(--muted)}
+.idle-msg .icon{font-size:32px;margin-bottom:10px}
+
+/* ── Responsive ── */
+@media(max-width:700px){.layout{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+
+<div class="hdr">
+  <div class="hdr-dot"></div>
+  <h1>LSTM FDC-AI — Trace Anomaly Detection</h1>
+  <div class="hdr-right">
+    <div class="status-pill"><div class="sdot" id="sdot"></div><span id="stext">Connecting…</span></div>
+    <span id="hdr-seq" style="display:none"></span>
+  </div>
+</div>
+
+<div class="layout">
+
+  <!-- ── Sidebar ── -->
+  <div class="sidebar">
+    <div>
+      <div class="slabel">Model metrics</div>
+      <div class="metric-grid">
+        <div class="mcard"><div class="mlabel">F1</div><div class="mval" id="mf1">—</div></div>
+        <div class="mcard"><div class="mlabel">AUC-ROC</div><div class="mval" id="mauc">—</div></div>
+        <div class="mcard"><div class="mlabel">AUC-PR</div><div class="mval" id="maupr">—</div></div>
+        <div class="mcard"><div class="mlabel">Threshold</div><div class="mval" id="mthr" style="font-size:13px">—</div></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="slabel">Training loss</div>
+      <div class="loss-wrap"><canvas id="loss-chart" class="loss-chart"></canvas></div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="slabel">Sample type</div>
+      <div class="radio-row">
+        <button class="rbtn sel" onclick="setMode('random',this)">Random</button>
+        <button class="rbtn"     onclick="setMode('fault',this)">Fault</button>
+        <button class="rbtn"     onclick="setMode('normal',this)">Normal</button>
+      </div>
+    </div>
+    <button class="btn primary" id="run-btn" onclick="runDemo()">Run prediction</button>
+
+    <div class="divider"></div>
+
+    <div>
+      <div class="slabel">Sensor anomaly ranking</div>
+      <div id="sensor-rank" class="sensor-list">
+        <div style="font-size:11px;color:var(--muted)">Run a prediction to see sensor ranking</div>
+      </div>
+    </div>
+
+    <div class="divider"></div>
+
+    <div style="font-size:11px;color:var(--muted);font-family:var(--mono);line-height:1.9">
+      GET  /health<br>GET  /metrics<br>GET  /demo<br>POST /predict<br>
+      <a href="/docs" style="color:var(--accent)">→ /docs (Swagger)</a>
+    </div>
+  </div>
+
+  <!-- ── Main content ── -->
+  <div class="main">
+
+    <!-- Verdict -->
+    <div class="verdict-card" id="verdict-card">
+      <div class="idle-msg" style="padding:10px 0;text-align:left">
+        <div class="icon">⚙️</div>
+        <div style="font-size:13px">Select a sample type and click <strong>Run prediction</strong></div>
+      </div>
+    </div>
+
+    <!-- Trace visualization -->
+    <div class="trace-card" id="trace-card" style="display:none">
+      <div class="trace-header">
+        <div class="trace-title">Sensor trace</div>
+        <span class="trace-badge" id="trace-badge">—</span>
+        <div class="sensor-selector" id="sensor-btns"></div>
+      </div>
+
+      <div class="chart-label">Sensor value (normalised 0–1)</div>
+      <div class="chart-wrap"><canvas id="trace-canvas" class="trace-canvas"></canvas></div>
+
+      <div class="chart-label" style="margin-top:8px">Temporal attention weights — which time steps the model focused on</div>
+      <div class="attn-wrap"><canvas id="attn-canvas" class="attn-canvas"></canvas></div>
+
+      <div class="chart-label" style="margin-top:8px">Reconstruction error per time step</div>
+      <div class="step-wrap"><canvas id="step-canvas" class="step-canvas"></canvas></div>
+
+      <div class="legend">
+        <div class="leg-item"><div class="leg-dot" style="background:var(--accent)"></div>Input (actual)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--orange)"></div>Reconstruction</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--purple);height:10px;width:10px;border-radius:2px"></div>Attention (high = anomalous step)</div>
+        <div class="leg-item"><div class="leg-dot" style="background:var(--red);height:10px;width:10px;border-radius:2px"></div>Step reconstruction error</div>
+      </div>
+    </div>
+
+    <!-- Log -->
+    <div class="log-card">
+      <div class="log-hdr">
+        <span>Prediction log</span>
+        <span style="font-size:11px;color:var(--muted);cursor:pointer" onclick="clearLog()">clear</span>
+      </div>
+      <div class="log-body" id="log-body">
+        <div><span class="log-ts">[init]</span> Dashboard loaded.</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+const API = '';
+let demoMode = 'random';
+let curData  = null;
+let curSensor= 0;
+
+function setMode(m, el) {
+  demoMode = m;
+  document.querySelectorAll('.rbtn').forEach(b => b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+function log(msg, cls='') {
+  const b = document.getElementById('log-body');
+  const ts = new Date().toLocaleTimeString();
+  b.innerHTML += `<div><span class="log-ts">[${ts}]</span> <span class="${cls}">${msg}</span></div>`;
+  b.scrollTop = b.scrollHeight;
+}
+function clearLog(){ document.getElementById('log-body').innerHTML = ''; }
+
+// ── Health + Metrics ──────────────────────────────────────────────────────────
+async function init() {
+  try {
+    const r = await fetch(API + '/health');
+    const d = await r.json();
+    const dot  = document.getElementById('sdot');
+    const stxt = document.getElementById('stext');
+    if (d.model_loaded) {
+      dot.classList.add('green');
+      stxt.textContent = 'Model loaded';
+      const seqEl = document.getElementById('hdr-seq');
+      seqEl.style.display = '';
+      seqEl.textContent = `seq_len=${d.seq_len}  sensors=${d.n_sensors}`;
+      log('API ready. Model loaded.', 'log-ok');
+      loadMetrics();
+    } else {
+      stxt.textContent = 'Model not loaded — run train.py';
+      log('Model not loaded. Run python train.py first.', 'log-err');
+    }
+  } catch(e) {
+    document.getElementById('stext').textContent = 'API offline';
+    log('Cannot reach API. Is uvicorn running?', 'log-err');
+  }
+}
+
+async function loadMetrics() {
+  try {
+    const r = await fetch(API + '/metrics');
+    const d = await r.json();
+    const m = d.metrics || {};
+    document.getElementById('mf1').textContent   = m.f1      ?? '—';
+    document.getElementById('mauc').textContent  = m.auc_roc ?? '—';
+    document.getElementById('maupr').textContent = m.auc_pr  ?? '—';
+    document.getElementById('mthr').textContent  = d.threshold ? d.threshold.toExponential(2) : '—';
+
+    if (d.loss_history && d.loss_history.length) {
+      drawLossChart(d.loss_history);
+    }
+  } catch(e) {}
+}
+
+// ── Loss chart ────────────────────────────────────────────────────────────────
+function drawLossChart(history) {
+  const canvas = document.getElementById('loss-chart');
+  const dpr  = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  const mx = Math.max(...history), mn = Math.min(...history);
+  const pad = { t:6, b:4, l:4, r:4 };
+
+  ctx.clearRect(0,0,W,H);
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.lineWidth   = 1.5;
+  ctx.beginPath();
+  history.forEach((v, i) => {
+    const x = pad.l + (i / (history.length-1)) * (W - pad.l - pad.r);
+    const y = pad.t + (1 - (v-mn)/(mx-mn+1e-12)) * (H - pad.t - pad.b);
+    i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
+  });
+  ctx.stroke();
+}
+
+// ── Demo prediction ───────────────────────────────────────────────────────────
+async function runDemo() {
+  const btn = document.getElementById('run-btn');
+  btn.innerHTML = '<span class="spin"></span>Running…';
+  btn.disabled  = true;
+
+  let url = API + '/demo';
+  if (demoMode === 'fault')  url += '?fault=true';
+  if (demoMode === 'normal') url += '?fault=false';
+
+  try {
+    const r = await fetch(url);
+    if (!r.ok) { const e = await r.text(); throw new Error(e); }
+    const d = await r.json();
+    curData = d;
+    renderVerdict(d);
+    renderSensorRanking(d);
+    buildSensorButtons(d);
+    curSensor = 0;
+    renderTrace(d, 0);
+    log(`Prediction [${d.sample_index}] → ${d.verdict}  (score: ${d.anomaly_score.toExponential(3)}, true: ${d.true_label_str})`,
+        d.is_anomaly ? 'log-err' : 'log-ok');
+  } catch(e) {
+    log('Error: ' + e.message, 'log-err');
+  } finally {
+    btn.innerHTML = 'Run prediction';
+    btn.disabled  = false;
+  }
+}
+
+// ── Verdict panel ─────────────────────────────────────────────────────────────
+function renderVerdict(d) {
+  const isF = d.is_anomaly;
+  const ratePct = Math.min(d.fault_pct, 300);
+  const barColor = isF ? 'var(--red)' : 'var(--green)';
+
+  document.getElementById('verdict-card').innerHTML = `
+    <div>
+      <div style="font-size:10px;color:var(--muted);margin-bottom:3px">VERDICT</div>
+      <div class="verdict-txt ${isF?'fault':'normal'}">${d.verdict}</div>
+      ${d.true_label_str ? `<div style="font-size:11px;color:var(--muted);margin-top:4px">True label: <span style="color:${d.true_label===1?'var(--red)':'var(--green)'}">${d.true_label_str}</span></div>` : ''}
+    </div>
+    <div class="score-row">
+      <div class="score-cell">
+        <div class="sclabel">Anomaly score</div>
+        <div class="scval" style="color:${isF?'var(--red)':'var(--green)'}">${d.anomaly_score.toExponential(3)}</div>
+        <div style="margin-top:6px;height:6px;background:var(--border);border-radius:3px;width:140px">
+          <div style="height:100%;border-radius:3px;background:${barColor};width:${Math.min(ratePct/3,100)}%;transition:width .5s"></div>
+        </div>
+        <div style="font-size:10px;color:var(--muted);margin-top:3px">${d.fault_pct.toFixed(0)}% of threshold</div>
+      </div>
+      <div class="score-cell">
+        <div class="sclabel">Threshold</div>
+        <div class="scval" style="color:var(--muted);font-size:15px">${d.threshold.toExponential(3)}</div>
+        <div class="scbadge ${isF?'badge-fault':'badge-ok'}">${isF?'Above — FAULT':'Below — NORMAL'}</div>
+      </div>
+      <div class="score-cell">
+        <div class="sclabel">Most anomalous sensor</div>
+        <div class="scval" style="color:var(--orange);font-size:17px">${d.sensor_ranking[0]?.sensor ?? '—'}</div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">err: ${(d.sensor_ranking[0]?.error??0).toFixed(5)}</div>
+      </div>
+    </div>`;
+}
+
+// ── Sensor ranking sidebar ────────────────────────────────────────────────────
+function renderSensorRanking(d) {
+  const el  = document.getElementById('sensor-rank');
+  const max = d.sensor_ranking[0]?.error || 1;
+  el.innerHTML = d.sensor_ranking.map((s,i) => {
+    const pct  = (s.error / max * 100).toFixed(1);
+    const clr  = i < 3 ? 'var(--red)' : i < 7 ? 'var(--orange)' : 'var(--muted)';
+    return `<div class="srow">
+      <div class="sname">${s.sensor}</div>
+      <div class="sbar-wrap"><div class="sbar-fill" style="width:${pct}%;background:${clr}"></div></div>
+      <div class="sval">${s.error.toFixed(5)}</div>
+    </div>`;
+  }).join('');
+}
+
+// ── Sensor selector buttons ───────────────────────────────────────────────────
+function buildSensorButtons(d) {
+  const el = document.getElementById('sensor-btns');
+  el.innerHTML = d.sensor_names.map((s,i) =>
+    `<button class="sensor-btn${i===0?' active':''}" onclick="selectSensor(${i},this)">${s}</button>`
+  ).join('');
+}
+
+function selectSensor(idx, el) {
+  document.querySelectorAll('.sensor-btn').forEach(b=>b.classList.remove('active'));
+  el.classList.add('active');
+  curSensor = idx;
+  if (curData) renderTrace(curData, idx);
+}
+
+// ── Main trace rendering ──────────────────────────────────────────────────────
+function renderTrace(d, sensorIdx) {
+  document.getElementById('trace-card').style.display = '';
+
+  const sname   = d.sensor_names[sensorIdx];
+  const T       = d.input_trace.length;
+  const input   = d.input_trace.map(row  => row[sensorIdx]);
+  const recon   = d.recon_trace.map(row  => row[sensorIdx]);
+  const attn    = d.attn_weights;
+  const stepErr = d.step_error;
+
+  // Badge
+  const err_s = d.sensor_error[sensorIdx];
+  document.getElementById('trace-badge').textContent = `${sname}  |  sensor error: ${err_s.toFixed(5)}`;
+
+  drawTracePlot(input, recon, T);
+  drawAttentionHeatmap(attn, T);
+  drawStepError(stepErr, T, d.is_anomaly);
+}
+
+// ── Trace chart (input vs reconstruction) ─────────────────────────────────────
+function drawTracePlot(input, recon, T) {
+  const canvas = document.getElementById('trace-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W = canvas.offsetWidth, H = canvas.offsetHeight;
+  const pad = {t:10, b:20, l:40, r:10};
+  const cW  = W - pad.l - pad.r;
+  const cH  = H - pad.t - pad.b;
+
+  const allVals = [...input, ...recon];
+  const vmin = Math.min(...allVals) - 0.02;
+  const vmax = Math.max(...allVals) + 0.02;
+
+  function toX(i) { return pad.l + i / (T-1) * cW; }
+  function toY(v) { return pad.t + (1 - (v-vmin)/(vmax-vmin)) * cH; }
+
+  ctx.clearRect(0,0,W,H);
+
+  // Grid
+  ctx.strokeStyle = 'rgba(26,48,80,.6)';
+  ctx.lineWidth   = 0.5;
+  for (let g=0; g<=4; g++) {
+    const y = pad.t + g/4 * cH;
+    ctx.beginPath(); ctx.moveTo(pad.l,y); ctx.lineTo(W-pad.r,y); ctx.stroke();
+    const val = vmax - g/4*(vmax-vmin);
+    ctx.fillStyle='rgba(90,138,176,.7)'; ctx.font='9px monospace';
+    ctx.fillText(val.toFixed(2), 2, y+4);
+  }
+  // X axis labels
+  ctx.fillStyle='rgba(90,138,176,.7)'; ctx.font='9px monospace';
+  [0, Math.floor(T/4), Math.floor(T/2), Math.floor(3*T/4), T-1].forEach(i => {
+    ctx.fillText(i, toX(i)-3, H-4);
+  });
+
+  // Reconstruction — draw first (under)
+  ctx.strokeStyle = '#f97316';
+  ctx.lineWidth   = 1.5;
+  ctx.setLineDash([4, 3]);
+  ctx.beginPath();
+  recon.forEach((v,i) => { i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v)); });
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Input
+  ctx.strokeStyle = '#0ea5e9';
+  ctx.lineWidth   = 2;
+  ctx.beginPath();
+  input.forEach((v,i) => { i===0 ? ctx.moveTo(toX(i),toY(v)) : ctx.lineTo(toX(i),toY(v)); });
+  ctx.stroke();
+}
+
+// ── Attention heatmap ─────────────────────────────────────────────────────────
+function drawAttentionHeatmap(attn, T) {
+  const canvas = document.getElementById('attn-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W  = canvas.offsetWidth;
+  const H  = canvas.offsetHeight;
+  const cw = W / T;
+  const max = Math.max(...attn);
+
+  ctx.clearRect(0,0,W,H);
+
+  attn.forEach((w, i) => {
+    const norm  = w / (max + 1e-12);
+    // Purple gradient: low → transparent dark, high → bright purple
+    const alpha = 0.15 + norm * 0.85;
+    const r = Math.round(80  + norm * 88);
+    const g = Math.round(20  + norm * 15);
+    const b = Math.round(120 + norm * 107);
+    ctx.fillStyle = `rgba(${r},${g},${b},${alpha})`;
+    ctx.fillRect(i * cw, 0, cw + 0.5, H);
+  });
+
+  // Overlay: mark top-3 most attended steps
+  const sorted = [...attn.map((v,i)=>({v,i}))].sort((a,b)=>b.v-a.v);
+  sorted.slice(0,3).forEach(({i}) => {
+    ctx.strokeStyle = 'rgba(168,85,247,.9)';
+    ctx.lineWidth   = 1.5;
+    ctx.strokeRect(i * cw + 0.5, 1, cw - 1, H - 2);
+  });
+}
+
+// ── Step reconstruction error bars ────────────────────────────────────────────
+function drawStepError(stepErr, T, isAnomaly) {
+  const canvas = document.getElementById('step-canvas');
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width  = canvas.offsetWidth  * dpr;
+  canvas.height = canvas.offsetHeight * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+
+  const W   = canvas.offsetWidth, H = canvas.offsetHeight;
+  const bw  = W / T;
+  const max = Math.max(...stepErr);
+
+  ctx.clearRect(0,0,W,H);
+
+  stepErr.forEach((e, i) => {
+    const norm  = e / (max + 1e-12);
+    const barH  = norm * H;
+    const alpha = 0.3 + norm * 0.7;
+    ctx.fillStyle = isAnomaly
+      ? `rgba(239,68,68,${alpha})`
+      : `rgba(34,197,94,${alpha})`;
+    ctx.fillRect(i * bw, H - barH, bw - 0.5, barH);
+  });
+}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+window.addEventListener('resize', () => {
+  if (curData) renderTrace(curData, curSensor);
+});
+init();
+</script>
+</body>
+</html>
